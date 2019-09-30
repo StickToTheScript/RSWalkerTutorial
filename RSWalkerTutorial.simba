@@ -1,0 +1,107 @@
+program new;
+{$H-}
+{$define SMART}
+{$I SRL/OSR.simba}
+{$I RSWalker/Walker.simba}
+
+type
+  TMSObject = record
+    WorldLoc: TPointArray;  //loctions on the world map
+    Color: TCTS2Color;      //must have color
+    MinCount: Int32;        //size of TPA
+    SplitDist: Int32;       //distance between pixels
+  end;
+
+const
+  // START FILLING IN HERE
+
+  LOGIN_NAME   = '';           // Account Login Email/Username
+  LOGIN_PASS   = '';           // Account Password
+  RS_WORLD     = -1;           // Preferred world, -1 = random world
+  IS_MEMBER    = False;        // Are you a member? True or False
+  MAP = 'world[3_6].png';      // Map that you are using
+
+  // END HERE
+
+var
+  RSW: TRSWalker;
+
+procedure declarePlayers();
+begin
+  with Players.New()^ do
+  begin
+    LoginName  := LOGIN_NAME;
+    Password   := LOGIN_PASS;
+    IsActive   := True;
+    IsMember   := IS_MEMBER;
+    World      := RS_WORLD;
+  end;
+  Players.SetCurrent(0);
+end;
+
+function TMSObject.Find(DoSort: Boolean=True; Expand:Int32=0): TRectArray;
+var
+  loc, me: TPoint;
+  rect: TRectangle;
+  locations, TPA: TPointArray;
+  ATPA: T2DPointArray;
+begin
+  me := RSW.GetMyPos();
+  locations := Copy(Self.WorldLoc);
+  if DoSort then Locations.Sorted(me);
+
+  for loc in Locations do
+  begin
+    rect := RSW.GetTileMSEx(me, loc, 1).Expand(Expand);
+    if MainScreen.GetBounds.Contains(rect.Bounds) then
+    begin
+      if (srl.FindColors(TPA, Color, rect.Bounds) < Self.MinCount) then
+        Continue;
+
+      if (Self.SplitDist > 0) then
+      begin
+        TPA  := rect.Filter(TPA);
+        ATPA := TPA.Cluster(Self.SplitDist);
+        ATPA.SortByMiddle(rect.Mean);
+        Result += ATPA[0].MinAreaRect;
+      end else
+        Result += rect.Expand(-Expand);
+    end;
+  end;
+end;
+
+procedure Test();
+var
+  i: Int32;
+  obj: TMSObject;
+  rectangles: array of TRectangle;
+begin
+  while True do
+  begin
+    //**************************************************************************
+    obj := [[[214, 469]], CTS2(2316393, 8, 0.06, 1.72), 200, 8];
+    //**************************************************************************
+    rectangles := obj.Find(True, 3);
+    smart.Image.Clear();
+    for i:=0 to High(rectangles) do
+      smart.Image.DrawTPA(rectangles[i].ToTPA.Connect, $00FFFF);
+  end;
+end;
+
+
+begin
+  smart.EnableDrawing := True;
+  srl.Setup([]);
+  RSW.Init(MAP, -1);
+  declarePlayers();
+
+  if (not SRL.isLoggedIn) then   //If not logged in then..
+  begin
+     Players.LoginCurrent();     //Log player in
+     Mainscreen.setAngle(True);  //Sets the camera angle to the highest point
+  end;
+
+  test();
+
+  RSW.Free();
+end.
